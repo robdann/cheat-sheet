@@ -1,0 +1,618 @@
+'use strict';
+
+// ─── State ─────────────────────────────────────────────────────────────────────
+
+let state = { songs: [], setlists: [], view: 'home', songId: null, setlistId: null };
+let _saveTimer = null;
+let _saveStatus = 'saved';
+
+function setSaveStatus(s) {
+  _saveStatus = s;
+  const el = document.getElementById('save-status');
+  if (!el) return;
+  el.textContent = s === 'saving' ? 'Saving…' : s === 'error' ? 'Save failed' : 'Saved';
+  el.className = 'save-status ' + s;
+}
+
+function save() {
+  localStorage.setItem('cs_v1', JSON.stringify(state));
+  clearTimeout(_saveTimer);
+  setSaveStatus('saving');
+  _saveTimer = setTimeout(async () => {
+    try {
+      const r = await fetch('/api/songs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ songs: state.songs, setlists: state.setlists }),
+      });
+      setSaveStatus(r.ok ? 'saved' : 'error');
+    } catch (_) { setSaveStatus('error'); }
+  }, 400);
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/songs');
+    if (r.ok) {
+      const data = await r.json();
+      // Handle old format (plain array) and new format ({songs, setlists})
+      if (Array.isArray(data)) {
+        if (data.length > 0) { state.songs = data; return; }
+      } else if (data && Array.isArray(data.songs)) {
+        state.songs = data.songs;
+        state.setlists = data.setlists || [];
+        return;
+      }
+    }
+  } catch (_) {}
+  try { const d = localStorage.getItem('cs_v1'); if (d) Object.assign(state, JSON.parse(d)); } catch (_) {}
+}
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+
+function S()  { return state.songs.find(s => s.id === state.songId); }
+function SL() { return state.setlists.find(sl => sl.id === state.setlistId); }
+function getSection(sid) { return S().sections.find(s => s.id === sid); }
+function getStep(aid)    { return S().arrangement.find(a => a.id === aid); }
+
+function esc(v) {
+  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Song mutations ────────────────────────────────────────────────────────────
+
+function goHome()     { state.view = 'home'; save(); render(); }
+function setView(v)   { state.view = v; save(); render(); }
+function openSong(id) { state.songId = id; state.view = 'edit'; save(); render(); }
+
+function newSong() {
+  const song = { id: uid(), title: 'Untitled', key: '', tempo: '', sections: [], arrangement: [] };
+  state.songs.push(song);
+  state.songId = song.id;
+  state.view = 'edit';
+  save(); render();
+}
+
+function deleteSong(id) {
+  if (!confirm('Delete this song?')) return;
+  state.songs = state.songs.filter(s => s.id !== id);
+  state.setlists.forEach(sl => { sl.entries = sl.entries.filter(e => e.songId !== id); });
+  if (state.songId === id) { state.songId = null; state.view = 'home'; }
+  save(); render();
+}
+
+function updateSong(field, value) { S()[field] = value; save(); }
+
+function addSection() {
+  S().sections.push({ id: uid(), name: '', abbr: '', lines: [''] });
+  save(); renderSections();
+}
+
+function removeSection(sid) {
+  const s = S();
+  s.sections = s.sections.filter(sec => sec.id !== sid);
+  s.arrangement = s.arrangement.filter(a => a.sectionId !== sid);
+  save(); renderSections(); renderArrangement();
+}
+
+function updateSecName(sid, value) {
+  const sec = getSection(sid);
+  sec.name = value;
+  if (!sec._abbrLocked) {
+    const initials = value.match(/\b[A-Za-z]/g)?.map(c => c.toUpperCase()).join('') || '';
+    sec.abbr = (initials || value.slice(0,2).toUpperCase()).slice(0,3);
+  }
+  save();
+}
+
+function updateSecAbbr(sid, value) {
+  const sec = getSection(sid);
+  sec.abbr = value.toUpperCase().slice(0, 3);
+  sec._abbrLocked = true;
+  save();
+}
+
+function addLine(sid) { getSection(sid).lines.push(''); save(); renderSections(); }
+
+function removeLine(sid, idx) {
+  const lines = getSection(sid).lines;
+  if (lines.length > 1) { lines.splice(idx, 1); save(); renderSections(); }
+}
+
+function updateLine(sid, idx, value) { getSection(sid).lines[idx] = value; save(); }
+
+function addStep(sectionId) {
+  S().arrangement.push({ id: uid(), sectionId, dynamics: '', note: '', transitionNote: '' });
+  save(); renderArrangement();
+}
+
+function removeStep(aid) {
+  S().arrangement = S().arrangement.filter(a => a.id !== aid);
+  save(); renderArrangement();
+}
+
+function moveStep(aid, dir) {
+  const arr = S().arrangement;
+  const i = arr.findIndex(a => a.id === aid);
+  const j = i + dir;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  save(); renderArrangement();
+}
+
+function setDynamics(aid, value) {
+  const step = getStep(aid);
+  step.dynamics = step.dynamics === value ? '' : value;
+  save(); renderArrangement();
+}
+
+function updateStepNote(aid, value)   { getStep(aid).note = value; save(); }
+function updateTransition(aid, value) { getStep(aid).transitionNote = value; save(); }
+
+// ─── Setlist mutations ─────────────────────────────────────────────────────────
+
+function newSetlist() {
+  const sl = { id: uid(), name: 'New Set List', entries: [] };
+  state.setlists.push(sl);
+  state.setlistId = sl.id;
+  state.view = 'setlist-edit';
+  save(); render();
+}
+
+function openSetlist(id) { state.setlistId = id; state.view = 'setlist-edit'; save(); render(); }
+
+function deleteSetlist(id) {
+  if (!confirm('Delete this set list?')) return;
+  state.setlists = state.setlists.filter(sl => sl.id !== id);
+  if (state.setlistId === id) { state.setlistId = null; state.view = 'home'; }
+  save(); render();
+}
+
+function updateSetlistName(value) { SL().name = value; save(); }
+
+function addSetlistEntry(songId) {
+  const song = state.songs.find(s => s.id === songId);
+  SL().entries.push({ id: uid(), songId, key: song?.key || '' });
+  save(); renderSetlistEntries();
+}
+
+function removeSetlistEntry(eid) {
+  SL().entries = SL().entries.filter(e => e.id !== eid);
+  save(); renderSetlistEntries();
+}
+
+function moveSetlistEntry(eid, dir) {
+  const entries = SL().entries;
+  const i = entries.findIndex(e => e.id === eid);
+  const j = i + dir;
+  if (j < 0 || j >= entries.length) return;
+  [entries[i], entries[j]] = [entries[j], entries[i]];
+  save(); renderSetlistEntries();
+}
+
+function updateEntryKey(eid, value) {
+  SL().entries.find(e => e.id === eid).key = value;
+  save();
+}
+
+// ─── Import / Export ───────────────────────────────────────────────────────────
+
+function exportData() {
+  const data = { songs: state.songs, setlists: state.setlists };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cheatsheet-export.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      // Accept both {songs, setlists} and plain songs array (old format)
+      const songs    = Array.isArray(data) ? data : (data.songs    || []);
+      const setlists = Array.isArray(data) ? []   : (data.setlists || []);
+      if (!Array.isArray(songs)) throw new Error('Invalid format');
+      if (!confirm(`Import ${songs.length} song(s) and ${setlists.length} set list(s)? This will replace all current data.`)) return;
+      state.songs    = songs;
+      state.setlists = setlists;
+      save();
+      render();
+    } catch (e) {
+      alert('Could not read file: ' + e.message);
+    }
+  };
+  input.click();
+}
+
+// ─── Render helpers ────────────────────────────────────────────────────────────
+
+const DYNAMICS_OPTS = ['FULL', 'DRUMS', 'DROP', 'BREAKDOWN', 'BUILD'];
+
+function instanceNum(arrangement, idx) {
+  const step = arrangement[idx];
+  const total = arrangement.filter(a => a.sectionId === step.sectionId).length;
+  if (total <= 1) return '';
+  return arrangement.slice(0, idx + 1).filter(a => a.sectionId === step.sectionId).length;
+}
+
+// Renders a single song's perform block (used in both single and setlist perform views)
+function renderSongBlock(song, overrideKey) {
+  const arr = song.arrangement;
+  const key = overrideKey || song.key;
+
+  const seen = new Set();
+  const usedSections = arr
+    .map(a => song.sections.find(sec => sec.id === a.sectionId))
+    .filter(sec => sec && !seen.has(sec.id) && seen.add(sec.id));
+
+  const arrBoxes = arr.map((a, i) => {
+    const sec = song.sections.find(sec => sec.id === a.sectionId) || {};
+    const num = instanceNum(arr, i);
+    const dyn = a.dynamics ? `<span class="p-dyn">${esc(a.dynamics.toLowerCase())}</span>` : '';
+    const note = a.note ? `<span class="p-note">${esc(a.note)}</span>` : '';
+    const trans = a.transitionNote && i < arr.length - 1
+      ? `<div class="p-trans-row"><span class="p-trans-note">→ ${esc(a.transitionNote)}</span></div>`
+      : '';
+    return `
+      <div class="p-arr-step">
+        <div class="p-step-box">
+          <span class="p-step-abbr">${esc(sec.abbr || '?')}${num}</span>
+          ${dyn}${note}
+        </div>
+        ${trans}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="p-header">
+      ${key ? `<span class="p-key">${esc(key)}</span><span class="p-sep">|</span>` : ''}
+      <span class="p-title">${esc(song.title)}</span>
+      ${song.tempo ? `<span class="p-tempo">♩=${esc(song.tempo)}</span>` : ''}
+    </div>
+    <div class="p-body">
+      <div class="p-sections">
+        ${usedSections.map(sec => `
+          <div class="p-section">
+            <span class="p-sec-abbr">${esc(sec.abbr)}</span>
+            <div class="p-lines">
+              ${sec.lines.map(line => `<div class="p-line">${esc(line)}</div>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="p-arr">${arrBoxes}</div>
+    </div>`;
+}
+
+// ─── Home ──────────────────────────────────────────────────────────────────────
+
+function renderHome() {
+  return `
+    <div class="home">
+      <header class="home-header">
+        <h1>Cheat Sheet</h1>
+        <div class="home-header-actions">
+          <button class="btn-sm" onclick="importData()" title="Import from a JSON file">↑ Import</button>
+          <button class="btn-sm" onclick="exportData()" title="Export all data to a JSON file">↓ Export</button>
+        </div>
+      </header>
+
+      <div class="home-section-hdr">
+        <h2>Songs</h2>
+        <button class="btn-primary" onclick="newSong()">+ New Song</button>
+      </div>
+      ${state.songs.length === 0
+        ? `<p class="empty-state">No songs yet.</p>`
+        : `<ul class="song-list">
+            ${state.songs.map(s => `
+              <li class="song-item" onclick="openSong('${s.id}')">
+                <div class="song-item-left">
+                  ${s.key ? `<span class="badge-key">${esc(s.key)}</span>` : ''}
+                  <span class="song-item-title">${esc(s.title)}</span>
+                </div>
+                <button class="btn-icon" onclick="event.stopPropagation(); deleteSong('${s.id}')">×</button>
+              </li>
+            `).join('')}
+           </ul>`
+      }
+
+      <div class="home-section-hdr" style="margin-top:2rem">
+        <h2>Set Lists</h2>
+        <button class="btn-primary" onclick="newSetlist()">+ New Set List</button>
+      </div>
+      ${state.setlists.length === 0
+        ? `<p class="empty-state">No set lists yet.</p>`
+        : `<ul class="song-list">
+            ${state.setlists.map(sl => `
+              <li class="song-item" onclick="openSetlist('${sl.id}')">
+                <div class="song-item-left">
+                  <span class="song-item-title">${esc(sl.name)}</span>
+                  <span class="badge-count">${sl.entries.length} song${sl.entries.length !== 1 ? 's' : ''}</span>
+                </div>
+                <button class="btn-icon" onclick="event.stopPropagation(); deleteSetlist('${sl.id}')">×</button>
+              </li>
+            `).join('')}
+           </ul>`
+      }
+    </div>`;
+}
+
+// ─── Song edit ─────────────────────────────────────────────────────────────────
+
+function renderEditShell() {
+  const s = S();
+  return `
+    <div class="edit-layout">
+      <div class="topbar">
+        <button class="btn-back" onclick="goHome()">← Home</button>
+        <input class="input-title" value="${esc(s.title)}" placeholder="Song title"
+               onblur="updateSong('title', this.value)"
+               onkeydown="if(event.key==='Enter') this.blur()">
+        <div class="song-meta">
+          <input class="input-meta" value="${esc(s.key)}" placeholder="Key"
+                 onblur="updateSong('key', this.value)" style="width:4rem">
+          <input class="input-meta" value="${esc(s.tempo)}" placeholder="♩="
+                 onblur="updateSong('tempo', this.value)" style="width:4rem">
+        </div>
+        <span id="save-status" class="save-status ${_saveStatus}">${_saveStatus === 'saving' ? 'Saving…' : _saveStatus === 'error' ? 'Save failed' : 'Saved'}</span>
+        <div class="view-toggle">
+          <button class="active">Edit</button>
+          <button onclick="setView('perform')">Perform</button>
+        </div>
+      </div>
+      <div class="edit-body">
+        <div class="panel" id="sections-panel">${renderSectionsHTML()}</div>
+        <div class="panel" id="arrangement-panel">${renderArrangementHTML()}</div>
+      </div>
+    </div>`;
+}
+
+function renderSectionsHTML() {
+  const s = S();
+  return `
+    <div class="panel-hdr">
+      <h2>Sections</h2>
+      <button class="btn-sm" onclick="addSection()">+ Add</button>
+    </div>
+    <div class="sections-list">
+      ${s.sections.map(sec => `
+        <div class="sec-card">
+          <div class="sec-card-hdr">
+            <input class="input-abbr" value="${esc(sec.abbr)}" placeholder="Ab" maxlength="3"
+                   title="Abbreviation"
+                   onblur="updateSecAbbr('${sec.id}', this.value)">
+            <input class="input-secname" value="${esc(sec.name)}" placeholder="Section name"
+                   onblur="updateSecName('${sec.id}', this.value)"
+                   onkeydown="if(event.key==='Enter') this.blur()">
+            <div class="sec-card-actions">
+              <button class="btn-sm" onclick="addStep('${sec.id}')" title="Append to arrangement">+arr</button>
+              <button class="btn-icon" onclick="removeSection('${sec.id}')">×</button>
+            </div>
+          </div>
+          <div class="sec-lines">
+            ${sec.lines.map((line, i) => `
+              <div class="line-row">
+                <input class="input-line" value="${esc(line)}" placeholder="1  5  6  4"
+                       onblur="updateLine('${sec.id}', ${i}, this.value)">
+                ${sec.lines.length > 1
+                  ? `<button class="btn-icon-sm" onclick="removeLine('${sec.id}', ${i})">×</button>`
+                  : ''}
+              </div>
+            `).join('')}
+            <button class="btn-addline" onclick="addLine('${sec.id}')">+ line</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+function renderArrangementHTML() {
+  const s = S();
+  const arr = s.arrangement;
+
+  const addRow = s.sections.length > 0 ? `
+    <div class="add-step-row">
+      <span class="add-label">Add →</span>
+      ${s.sections.map(sec => `
+        <button class="btn-sec-add" onclick="addStep('${sec.id}')">${esc(sec.abbr || sec.name || '?')}</button>
+      `).join('')}
+    </div>` : '';
+
+  if (arr.length === 0) {
+    return `
+      <div class="panel-hdr"><h2>Arrangement</h2></div>
+      <p class="empty-state">Build sections on the left, then add them here.</p>
+      ${addRow}`;
+  }
+
+  return `
+    <div class="panel-hdr"><h2>Arrangement</h2></div>
+    <div class="arr-list">
+      ${arr.map((a, i) => {
+        const sec = getSection(a.sectionId) || {};
+        const num = instanceNum(arr, i);
+        const isLast = i === arr.length - 1;
+        return `
+          <div class="arr-step">
+            <div class="arr-step-main">
+              <span class="arr-abbr-badge">${esc(sec.abbr || '?')}${num}</span>
+              <span class="arr-secname">${esc(sec.name || '?')}</span>
+              <div class="dyn-row">
+                ${DYNAMICS_OPTS.map(d => `
+                  <button class="dyn-btn ${a.dynamics === d ? 'dyn-active' : ''}"
+                          onclick="setDynamics('${a.id}', '${d}')">${d}</button>
+                `).join('')}
+              </div>
+              <input class="input-step-note" value="${esc(a.note)}" placeholder="note…"
+                     title="Optional annotation (e.g. x2, hold, solo)"
+                     onblur="updateStepNote('${a.id}', this.value)">
+              <div class="step-ctrl">
+                <button class="btn-icon-sm" onclick="moveStep('${a.id}',-1)" ${i===0?'disabled':''}>↑</button>
+                <button class="btn-icon-sm" onclick="moveStep('${a.id}',1)"  ${isLast?'disabled':''}>↓</button>
+                <button class="btn-icon"    onclick="removeStep('${a.id}')">×</button>
+              </div>
+            </div>
+            ${!isLast ? `
+              <div class="transition-row">
+                <span class="trans-arrow">↓</span>
+                <input class="input-trans" value="${esc(a.transitionNote)}" placeholder="landing note →next"
+                       title="Note to play transitioning into the next section"
+                       onblur="updateTransition('${a.id}', this.value)">
+              </div>` : ''}
+          </div>`;
+      }).join('')}
+    </div>
+    ${addRow}`;
+}
+
+// ─── Song perform ──────────────────────────────────────────────────────────────
+
+function renderPerformView() {
+  return `
+    <div class="perform-layout">
+      <div class="topbar topbar-perform">
+        <button class="btn-back" onclick="setView('edit')">← Edit</button>
+        <div class="view-toggle">
+          <button onclick="setView('edit')">Edit</button>
+          <button class="active">Perform</button>
+        </div>
+        <button class="btn-sm" onclick="window.print()">Print</button>
+      </div>
+      <div class="perform-sheet" id="print-area">
+        ${renderSongBlock(S(), null)}
+      </div>
+    </div>`;
+}
+
+// ─── Setlist edit ──────────────────────────────────────────────────────────────
+
+function renderSetlistEditShell() {
+  const sl = SL();
+  return `
+    <div class="edit-layout">
+      <div class="topbar">
+        <button class="btn-back" onclick="goHome()">← Home</button>
+        <input class="input-title" value="${esc(sl.name)}" placeholder="Set list name"
+               onblur="updateSetlistName(this.value)"
+               onkeydown="if(event.key==='Enter') this.blur()">
+        <span id="save-status" class="save-status ${_saveStatus}">${_saveStatus === 'saving' ? 'Saving…' : _saveStatus === 'error' ? 'Save failed' : 'Saved'}</span>
+        <div class="view-toggle">
+          <button class="active">Edit</button>
+          <button onclick="setView('setlist-perform')">Perform</button>
+        </div>
+      </div>
+      <div class="setlist-edit-body" id="setlist-entries-panel">
+        ${renderSetlistEntriesHTML()}
+      </div>
+    </div>`;
+}
+
+function renderSetlistEntriesHTML() {
+  const sl = SL();
+  const available = state.songs.filter(s => s.title || s.sections.length);
+
+  return `
+    <div class="sl-entries">
+      ${sl.entries.length === 0
+        ? `<p class="empty-state">No songs added yet — pick from the list below.</p>`
+        : sl.entries.map((entry, i) => {
+            const song = state.songs.find(s => s.id === entry.songId);
+            if (!song) return '';
+            const isLast = i === sl.entries.length - 1;
+            return `
+              <div class="sl-entry">
+                <span class="sl-num">${i + 1}</span>
+                <input class="input-meta sl-key" value="${esc(entry.key)}" placeholder="Key"
+                       title="Key for this song in the set"
+                       onblur="updateEntryKey('${entry.id}', this.value)">
+                <span class="sl-song-title">${esc(song.title)}</span>
+                <div class="step-ctrl">
+                  <button class="btn-icon-sm" onclick="moveSetlistEntry('${entry.id}',-1)" ${i===0?'disabled':''}>↑</button>
+                  <button class="btn-icon-sm" onclick="moveSetlistEntry('${entry.id}',1)"  ${isLast?'disabled':''}>↓</button>
+                  <button class="btn-icon"    onclick="removeSetlistEntry('${entry.id}')">×</button>
+                </div>
+              </div>`;
+          }).join('')
+      }
+    </div>
+    <div class="add-step-row">
+      <span class="add-label">Add →</span>
+      ${available.map(s => `
+        <button class="btn-sec-add" onclick="addSetlistEntry('${s.id}')">
+          ${s.key ? `<span style="opacity:.6;font-size:.7em">${esc(s.key)} </span>` : ''}${esc(s.title || 'Untitled')}
+        </button>
+      `).join('')}
+    </div>`;
+}
+
+// ─── Setlist perform ───────────────────────────────────────────────────────────
+
+function renderSetlistPerformView() {
+  const sl = SL();
+  const blocks = sl.entries.map((entry, i) => {
+    const song = state.songs.find(s => s.id === entry.songId);
+    if (!song) return '';
+    return `
+      <div class="sl-song-block ${i > 0 ? 'sl-song-block-sep' : ''}">
+        <div class="sl-song-num">${i + 1}</div>
+        ${renderSongBlock(song, entry.key)}
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="perform-layout">
+      <div class="topbar topbar-perform">
+        <button class="btn-back" onclick="setView('setlist-edit')">← Edit</button>
+        <span class="sl-perform-title">${esc(sl.name)}</span>
+        <div class="view-toggle">
+          <button onclick="setView('setlist-edit')">Edit</button>
+          <button class="active">Perform</button>
+        </div>
+        <button class="btn-sm" onclick="window.print()">Print</button>
+      </div>
+      <div class="perform-sheet" id="print-area">
+        ${blocks || '<p class="empty-state">No songs in this set list.</p>'}
+      </div>
+    </div>`;
+}
+
+// ─── Partial re-renders ────────────────────────────────────────────────────────
+
+function renderSections() {
+  const el = document.getElementById('sections-panel');
+  if (el) el.innerHTML = renderSectionsHTML();
+}
+
+function renderArrangement() {
+  const el = document.getElementById('arrangement-panel');
+  if (el) el.innerHTML = renderArrangementHTML();
+}
+
+function renderSetlistEntries() {
+  const el = document.getElementById('setlist-entries-panel');
+  if (el) el.innerHTML = renderSetlistEntriesHTML();
+}
+
+// ─── Main render ───────────────────────────────────────────────────────────────
+
+function render() {
+  const app = document.getElementById('app');
+  if      (state.view === 'home')            app.innerHTML = renderHome();
+  else if (state.view === 'edit')            app.innerHTML = renderEditShell();
+  else if (state.view === 'perform')         app.innerHTML = renderPerformView();
+  else if (state.view === 'setlist-edit')    app.innerHTML = renderSetlistEditShell();
+  else if (state.view === 'setlist-perform') app.innerHTML = renderSetlistPerformView();
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+
+load().then(() => render());

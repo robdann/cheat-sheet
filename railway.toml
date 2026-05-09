@@ -1,0 +1,6 @@
+[build]
+builder = "dockerfile"
+
+[deploy]
+healthcheckPath = "/api/songs"
+restartPolicyType = "on_failure"
