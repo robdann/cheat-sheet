@@ -142,27 +142,29 @@ input  { font-family: var(--font-ui); }
   font-size: 1rem;
 }
 
-.view-toggle {
+.view-tabs {
   display: flex;
+  border-bottom: 1px solid var(--border);
   background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 6px;
-  overflow: hidden;
+  padding: 0 1.1rem;
+  flex-shrink: 0;
 }
-.view-toggle button {
+
+.view-tab {
   background: none;
   border: none;
+  border-bottom: 2px solid transparent;
   color: var(--muted);
-  padding: 0.35rem 1rem;
-  font-size: 0.75rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
   font-weight: 500;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-family: var(--font-ui);
-  transition: color 0.15s, background 0.15s;
+  padding: 0.5rem 1rem 0.6rem;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
 }
-.view-toggle button.active { background: var(--violet); color: #fff; }
-.view-toggle button:not(.active):hover { color: var(--text); }
+.view-tab:hover { color: var(--text); }
+.view-tab.active { color: var(--text); border-bottom-color: var(--violet); }
 
 .save-status {
   font-size: 0.7rem;
@@ -320,6 +322,38 @@ input  { font-family: var(--font-ui); }
 }
 
 .home-header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+.home-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.2rem;
+}
+
+.home-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 0.5rem 1.1rem 0.6rem;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.home-tab:hover { color: var(--text); }
+.home-tab.active { color: var(--text); border-bottom-color: var(--violet); }
+
+.home-tab-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-bottom: 0.8rem;
+}
+
+.song-item-actions { display: flex; gap: 0.1rem; align-items: center; }
 
 .home-section-hdr {
   display: flex;
@@ -1001,7 +1035,7 @@ input  { font-family: var(--font-ui); }
   .topbar { padding: 0.5rem 1rem; flex-wrap: wrap; }
   .input-title { min-width: 0; }
   .type-picker { order: 3; width: 100%; }
-  .view-toggle { margin-left: auto; }
+
   .save-status { display: none; }
   .home-content { padding: 1rem; }
 }

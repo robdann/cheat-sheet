@@ -2,7 +2,7 @@
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
-let state = { songs: [], setlists: [], view: 'home', songId: null, setlistId: null };
+let state = { songs: [], setlists: [], view: 'home', songId: null, setlistId: null, homeTab: 'songs' };
 let _saveTimer = null;
 let _saveStatus = 'saved';
 
@@ -63,7 +63,8 @@ function esc(v) {
 
 function goHome()     { state.view = 'home'; save(); render(); }
 function setView(v)   { state.view = v; save(); render(); }
-function openSong(id) { state.songId = id; state.view = 'edit'; save(); render(); }
+function openSong(id)     { state.songId = id; state.view = 'perform'; save(); render(); }
+function editSong(id)     { state.songId = id; state.view = 'edit'; save(); render(); }
 
 function newSong() {
   const song = { id: uid(), title: 'Untitled', key: '', tempo: '', sections: [], arrangement: [] };
@@ -164,7 +165,8 @@ function newSetlist() {
   save(); render();
 }
 
-function openSetlist(id) { state.setlistId = id; state.view = 'setlist-edit'; save(); render(); }
+function openSetlist(id)     { state.setlistId = id; state.view = 'setlist-perform'; save(); render(); }
+function editSetlist(id)     { state.setlistId = id; state.view = 'setlist-edit'; save(); render(); }
 
 function deleteSetlist(id) {
   if (!confirm('Delete this set list?')) return;
@@ -308,7 +310,33 @@ function renderSongBlock(song, overrideKey) {
 
 // ─── Home ──────────────────────────────────────────────────────────────────────
 
+function setHomeTab(tab) { state.homeTab = tab; render(); }
+
 function renderHome() {
+  const tab = state.homeTab || 'songs';
+  const songRows = [...state.songs].sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(s => `
+    <li class="song-item ${s.type ? 'has-type type-' + s.type.toLowerCase().replace('-','') : ''}" onclick="openSong('${s.id}')">
+      <div class="song-item-left">
+        <span class="song-item-title">${esc(s.title)}</span>
+      </div>
+      <div class="song-item-actions">
+        <button class="btn-icon" title="Edit" onclick="event.stopPropagation(); editSong('${s.id}')">✎</button>
+        <button class="btn-icon" onclick="event.stopPropagation(); deleteSong('${s.id}')">×</button>
+      </div>
+    </li>`).join('');
+
+  const setlistRows = state.setlists.map(sl => `
+    <li class="song-item" onclick="openSetlist('${sl.id}')">
+      <div class="song-item-left">
+        <span class="song-item-title">${esc(sl.name)}</span>
+        <span class="badge-count">${sl.entries.length} song${sl.entries.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="song-item-actions">
+        <button class="btn-icon" title="Edit" onclick="event.stopPropagation(); editSetlist('${sl.id}')">✎</button>
+        <button class="btn-icon" onclick="event.stopPropagation(); deleteSetlist('${sl.id}')">×</button>
+      </div>
+    </li>`).join('');
+
   return `
     <div class="home">
       <header class="home-header">
@@ -319,51 +347,39 @@ function renderHome() {
             <span class="wm-sub">Praise · Worship</span>
           </div>
         </div>
-        <div class="home-header-actions">
-        </div>
       </header>
 
-      <div class="home-section-hdr">
-        <h2>Songs</h2>
-        <button class="btn-primary" onclick="newSong()">+ New Song</button>
+      <div class="home-tabs">
+        <button class="home-tab ${tab === 'songs' ? 'active' : ''}" onclick="setHomeTab('songs')">Songs</button>
+        <button class="home-tab ${tab === 'setlists' ? 'active' : ''}" onclick="setHomeTab('setlists')">Set Lists</button>
       </div>
-      ${state.songs.length === 0
-        ? `<p class="empty-state">No songs yet.</p>`
-        : `<ul class="song-list">
-            ${[...state.songs].sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(s => `
-              <li class="song-item ${s.type ? 'has-type type-' + s.type.toLowerCase().replace('-','') : ''}" onclick="openSong('${s.id}')">
-                <div class="song-item-left">
-                  ${s.key ? `<span class="badge-key">${esc(s.key)}</span>` : ''}
-                  <span class="song-item-title">${esc(s.title)}</span>
-                  ${s.type ? `<span class="badge-type type-${s.type.toLowerCase().replace('-','')}">${esc(s.type)}</span>` : ''}
-                </div>
-                <button class="btn-icon" onclick="event.stopPropagation(); deleteSong('${s.id}')">×</button>
-              </li>
-            `).join('')}
-           </ul>`
-      }
 
-      <div class="home-section-hdr" style="margin-top:2rem">
-        <h2>Set Lists</h2>
-        <div style="display:flex;gap:0.5rem">
+      ${tab === 'songs' ? `
+        <div class="home-tab-actions">
+          <button class="btn-primary" onclick="newSong()">+ New Song</button>
+        </div>
+        ${state.songs.length === 0
+          ? `<p class="empty-state">No songs yet.</p>`
+          : `<ul class="song-list">${songRows}</ul>`}
+      ` : `
+        <div class="home-tab-actions">
           <button class="btn-sm" onclick="generateRandomSetlist()" title="1 All-Age · 2 Praise · 2 Worship">⚄ Random</button>
           <button class="btn-primary" onclick="newSetlist()">+ New Set List</button>
         </div>
-      </div>
-      ${state.setlists.length === 0
-        ? `<p class="empty-state">No set lists yet.</p>`
-        : `<ul class="song-list">
-            ${state.setlists.map(sl => `
-              <li class="song-item" onclick="openSetlist('${sl.id}')">
-                <div class="song-item-left">
-                  <span class="song-item-title">${esc(sl.name)}</span>
-                  <span class="badge-count">${sl.entries.length} song${sl.entries.length !== 1 ? 's' : ''}</span>
-                </div>
-                <button class="btn-icon" onclick="event.stopPropagation(); deleteSetlist('${sl.id}')">×</button>
-              </li>
-            `).join('')}
-           </ul>`
-      }
+        ${state.setlists.length === 0
+          ? `<p class="empty-state">No set lists yet.</p>`
+          : `<ul class="song-list">${setlistRows}</ul>`}
+      `}
+    </div>`;
+}
+
+// ─── View toggle helper ────────────────────────────────────────────────────────
+
+function viewToggleHTML(active, editView, performView) {
+  return `
+    <div class="view-tabs">
+      <button class="view-tab ${active === 'edit' ? 'active' : ''}" onclick="setView('${editView}')">Edit</button>
+      <button class="view-tab ${active === 'perform' ? 'active' : ''}" onclick="setView('${performView}')">Perform</button>
     </div>`;
 }
 
@@ -385,11 +401,8 @@ function renderEditShell() {
           `).join('')}
         </div>
         <span id="save-status" class="save-status ${_saveStatus}">${_saveStatus === 'saving' ? 'Saving…' : _saveStatus === 'error' ? 'Save failed' : 'Saved'}</span>
-        <div class="view-toggle">
-          <button class="active">Edit</button>
-          <button onclick="setView('perform')">Perform</button>
-        </div>
       </div>
+      ${viewToggleHTML('edit', 'edit', 'perform')}
       <div class="edit-body">
         <div class="panel" id="sections-panel">${renderSectionsHTML()}</div>
         <div class="panel" id="arrangement-panel">${renderArrangementHTML()}</div>
@@ -501,13 +514,10 @@ function renderPerformView() {
   return `
     <div class="perform-layout">
       <div class="topbar topbar-perform">
-        <button class="btn-back" onclick="setView('edit')">← Edit</button>
-        <div class="view-toggle">
-          <button onclick="setView('edit')">Edit</button>
-          <button class="active">Perform</button>
-        </div>
+        <button class="btn-back" onclick="goHome()">← Home</button>
         <button class="btn-sm" onclick="window.print()">Print</button>
       </div>
+      ${viewToggleHTML('perform', 'edit', 'perform')}
       <div class="perform-sheet" id="print-area">
         ${renderSongBlock(S(), null)}
       </div>
@@ -526,11 +536,8 @@ function renderSetlistEditShell() {
                onblur="updateSetlistName(this.value)"
                onkeydown="if(event.key==='Enter') this.blur()">
         <span id="save-status" class="save-status ${_saveStatus}">${_saveStatus === 'saving' ? 'Saving…' : _saveStatus === 'error' ? 'Save failed' : 'Saved'}</span>
-        <div class="view-toggle">
-          <button class="active">Edit</button>
-          <button onclick="setView('setlist-perform')">Perform</button>
-        </div>
       </div>
+      ${viewToggleHTML('edit', 'setlist-edit', 'setlist-perform')}
       <div class="setlist-edit-body" id="setlist-entries-panel">
         ${renderSetlistEntriesHTML()}
       </div>
@@ -606,14 +613,11 @@ function renderSetlistPerformView() {
   return `
     <div class="perform-layout">
       <div class="topbar topbar-perform">
-        <button class="btn-back" onclick="setView('setlist-edit')">← Edit</button>
+        <button class="btn-back" onclick="goHome()">← Home</button>
         <span class="sl-perform-title">${esc(sl.name)}</span>
-        <div class="view-toggle">
-          <button onclick="setView('setlist-edit')">Edit</button>
-          <button class="active">Perform</button>
-        </div>
         <button class="btn-sm" onclick="window.print()">Print</button>
       </div>
+      ${viewToggleHTML('perform', 'setlist-edit', 'setlist-perform')}
       <div class="perform-sheet" id="print-area">
         ${blocks || '<p class="empty-state">No songs in this set list.</p>'}
       </div>
