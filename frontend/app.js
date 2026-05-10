@@ -580,6 +580,13 @@ function renderSetlistEntriesHTML() {
   const sl = SL();
   const available = state.songs.filter(s => s.title || s.sections.length);
 
+  // Group available songs by type for the picker
+  const groups = [...SONG_TYPES, ''].map(type => ({
+    type,
+    label: type || 'Untagged',
+    songs: available.filter(s => (s.type || '') === type),
+  })).filter(g => g.songs.length > 0);
+
   return `
     <div class="sl-entries">
       ${sl.entries.length === 0
@@ -588,12 +595,14 @@ function renderSetlistEntriesHTML() {
             const song = state.songs.find(s => s.id === entry.songId);
             if (!song) return '';
             const isLast = i === sl.entries.length - 1;
+            const typeClass = song.type ? `type-${song.type.toLowerCase().replace('-','')}` : '';
             return `
               <div class="sl-entry">
                 <span class="sl-num">${i + 1}</span>
                 <input class="input-meta sl-key" value="${esc(entry.key)}" placeholder="Key"
                        title="Key for this song in the set"
                        onblur="updateEntryKey('${entry.id}', this.value)">
+                ${song.type ? `<span class="badge-type ${typeClass}">${esc(song.type)}</span>` : ''}
                 <span class="sl-song-title">${esc(song.title)}</span>
                 <div class="step-ctrl">
                   <button class="btn-icon-sm" onclick="moveSetlistEntry('${entry.id}',-1)" ${i===0?'disabled':''}>↑</button>
@@ -604,12 +613,18 @@ function renderSetlistEntriesHTML() {
           }).join('')
       }
     </div>
-    <div class="add-step-row">
-      <span class="add-label">Add →</span>
-      ${available.map(s => `
-        <button class="btn-sec-add" onclick="addSetlistEntry('${s.id}')">
-          ${s.key ? `<span style="opacity:.6;font-size:.7em">${esc(s.key)} </span>` : ''}${esc(s.title || 'Untitled')}
-        </button>
+    <div class="sl-picker">
+      ${groups.map(g => `
+        <div class="sl-picker-group">
+          <span class="sl-picker-label ${g.type ? `type-${g.type.toLowerCase().replace('-','')}` : ''}">${esc(g.label)}</span>
+          <div class="sl-picker-songs">
+            ${g.songs.map(s => `
+              <button class="btn-sec-add" onclick="addSetlistEntry('${s.id}')">
+                ${s.key ? `<span style="opacity:.6;font-size:.7em">${esc(s.key)} </span>` : ''}${esc(s.title || 'Untitled')}
+              </button>
+            `).join('')}
+          </div>
+        </div>
       `).join('')}
     </div>`;
 }
