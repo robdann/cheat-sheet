@@ -411,12 +411,6 @@ function renderEditShell() {
         <input class="input-title" value="${esc(s.title)}" placeholder="Song title"
                onblur="updateSong('title', this.value)"
                onkeydown="if(event.key==='Enter') this.blur()">
-        <div class="song-meta">
-          <input class="input-meta" value="${esc(s.key)}" placeholder="Key"
-                 onblur="updateSong('key', this.value)" style="width:4rem">
-          <input class="input-meta" value="${esc(s.tempo)}" placeholder="♩="
-                 onblur="updateSong('tempo', this.value)" style="width:4rem">
-        </div>
         <div class="type-picker">
           ${SONG_TYPES.map(t => `
             <button class="type-btn type-${t.toLowerCase().replace('-','')} ${s.type === t ? 'type-active' : ''}"
@@ -597,12 +591,11 @@ function renderSetlistEntriesHTML() {
             const isLast = i === sl.entries.length - 1;
             const typeClass = song.type ? `type-${song.type.toLowerCase().replace('-','')}` : '';
             return `
-              <div class="sl-entry">
+              <div class="sl-entry ${typeClass}">
                 <span class="sl-num">${i + 1}</span>
                 <input class="input-meta sl-key" value="${esc(entry.key)}" placeholder="Key"
                        title="Key for this song in the set"
                        onblur="updateEntryKey('${entry.id}', this.value)">
-                ${song.type ? `<span class="badge-type ${typeClass}">${esc(song.type)}</span>` : ''}
                 <span class="sl-song-title">${esc(song.title)}</span>
                 <div class="step-ctrl">
                   <button class="btn-icon-sm" onclick="moveSetlistEntry('${entry.id}',-1)" ${i===0?'disabled':''}>↑</button>

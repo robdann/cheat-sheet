@@ -850,11 +850,16 @@ input  { font-family: var(--font-ui); }
   gap: 0.7rem;
   background: var(--surface2);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
   border-radius: 7px;
   padding: 0.5rem 0.8rem;
   transition: border-color 0.15s;
 }
 .sl-entry:hover { border-color: var(--border2); }
+.sl-entry.type-praise  { border-left-color: var(--tc-praise); }
+.sl-entry.type-worship { border-left-color: var(--tc-worship); }
+.sl-entry.type-moment  { border-left-color: var(--tc-moment); }
+.sl-entry.type-allage  { border-left-color: var(--tc-allage); }
 
 .sl-num {
   font-family: var(--font-mono);
@@ -935,6 +940,29 @@ input  { font-family: var(--font-ui); }
   line-height: 1;
   user-select: none;
   opacity: 0.6;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  /* Perform */
+  .perform-sheet { padding: 1.25rem 1rem; margin: 0; max-width: 100%; }
+  .p-body { flex-direction: column; gap: 1.5rem; }
+  .p-sections { width: 100%; }
+  .p-arr      { width: 100%; }
+
+  /* Edit */
+  .edit-layout { height: auto; min-height: 100vh; }
+  .edit-body { grid-template-columns: 1fr; overflow: visible; }
+  .panel { overflow-y: visible; border-right: none; border-bottom: 1px solid var(--border); }
+  .panel:last-child { border-bottom: none; }
+
+  .topbar { padding: 0.5rem 1rem; flex-wrap: wrap; }
+  .input-title { min-width: 0; }
+  .type-picker { order: 3; width: 100%; }
+  .view-toggle { margin-left: auto; }
+  .save-status { display: none; }
+  .home-content { padding: 1rem; }
 }
 
 /* ─── Print ────────────────────────────────────────────────────────────────── */
