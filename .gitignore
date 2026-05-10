@@ -1,0 +1,5 @@
+backend/songs.json
+backend/.venv
+songs/
+__pycache__/
+*.pyc

@@ -83,6 +83,11 @@ function deleteSong(id) {
 
 function updateSong(field, value) { S()[field] = value; save(); }
 
+function setSongType(type) {
+  S().type = S().type === type ? '' : type;
+  save(); render();
+}
+
 function addSection() {
   S().sections.push({ id: uid(), name: '', abbr: '', lines: [''] });
   save(); renderSections();
@@ -195,6 +200,50 @@ function updateEntryKey(eid, value) {
   save();
 }
 
+// ─── Random set list ───────────────────────────────────────────────────────────
+
+function randomPick(songs, n) {
+  const pool = [...songs];
+  const picks = [];
+  while (picks.length < n && pool.length > 0) {
+    const i = Math.floor(Math.random() * pool.length);
+    picks.push(pool.splice(i, 1)[0]);
+  }
+  return picks;
+}
+
+function generateRandomSetlist() {
+  const byType = t => state.songs.filter(s => s.type === t);
+  const allAge  = byType('All-Age');
+  const praise  = byType('Praise');
+  const worship = byType('Worship');
+
+  const missing = [];
+  if (allAge.length  < 1) missing.push('1 All-Age');
+  if (praise.length  < 2) missing.push('2 Praise');
+  if (worship.length < 2) missing.push('2 Worship');
+  if (missing.length) {
+    alert(`Not enough tagged songs. Still need: ${missing.join(', ')}.`);
+    return;
+  }
+
+  const picks = [
+    ...randomPick(allAge, 1),
+    ...randomPick(praise, 2),
+    ...randomPick(worship, 2),
+  ];
+
+  const sl = {
+    id: uid(),
+    name: 'Random Set',
+    entries: picks.map(s => ({ id: uid(), songId: s.id, key: s.key || '' })),
+  };
+  state.setlists.push(sl);
+  state.setlistId = sl.id;
+  state.view = 'setlist-edit';
+  save(); render();
+}
+
 // ─── Import / Export ───────────────────────────────────────────────────────────
 
 function exportData() {
@@ -236,6 +285,7 @@ function importData() {
 // ─── Render helpers ────────────────────────────────────────────────────────────
 
 const DYNAMICS_OPTS = ['FULL', 'DRUMS', 'DROP', 'BREAKDOWN', 'BUILD'];
+const SONG_TYPES    = ['Praise', 'Worship', 'Moment', 'All-Age'];
 
 function instanceNum(arrangement, idx) {
   const step = arrangement[idx];
@@ -313,11 +363,12 @@ function renderHome() {
       ${state.songs.length === 0
         ? `<p class="empty-state">No songs yet.</p>`
         : `<ul class="song-list">
-            ${state.songs.map(s => `
+            ${[...state.songs].sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(s => `
               <li class="song-item" onclick="openSong('${s.id}')">
                 <div class="song-item-left">
                   ${s.key ? `<span class="badge-key">${esc(s.key)}</span>` : ''}
                   <span class="song-item-title">${esc(s.title)}</span>
+                  ${s.type ? `<span class="badge-type type-${s.type.toLowerCase().replace('-','')}">${esc(s.type)}</span>` : ''}
                 </div>
                 <button class="btn-icon" onclick="event.stopPropagation(); deleteSong('${s.id}')">×</button>
               </li>
@@ -327,7 +378,10 @@ function renderHome() {
 
       <div class="home-section-hdr" style="margin-top:2rem">
         <h2>Set Lists</h2>
-        <button class="btn-primary" onclick="newSetlist()">+ New Set List</button>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn-sm" onclick="generateRandomSetlist()" title="1 All-Age · 2 Praise · 2 Worship">⚄ Random</button>
+          <button class="btn-primary" onclick="newSetlist()">+ New Set List</button>
+        </div>
       </div>
       ${state.setlists.length === 0
         ? `<p class="empty-state">No set lists yet.</p>`
@@ -362,6 +416,12 @@ function renderEditShell() {
                  onblur="updateSong('key', this.value)" style="width:4rem">
           <input class="input-meta" value="${esc(s.tempo)}" placeholder="♩="
                  onblur="updateSong('tempo', this.value)" style="width:4rem">
+        </div>
+        <div class="type-picker">
+          ${SONG_TYPES.map(t => `
+            <button class="type-btn type-${t.toLowerCase().replace('-','')} ${s.type === t ? 'type-active' : ''}"
+                    onclick="setSongType('${t}')">${t}</button>
+          `).join('')}
         </div>
         <span id="save-status" class="save-status ${_saveStatus}">${_saveStatus === 'saving' ? 'Saving…' : _saveStatus === 'error' ? 'Save failed' : 'Saved'}</span>
         <div class="view-toggle">
