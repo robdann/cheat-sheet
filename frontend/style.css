@@ -268,14 +268,55 @@ input  { font-family: var(--font-ui); }
   border-bottom: 1px solid var(--border);
 }
 
-.home-header h1 {
+.home-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.wm-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 2px solid var(--border2);
+  border-radius: 3px;
+  flex-shrink: 0;
+  position: relative;
+}
+.wm-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  background: var(--gold);
+}
+
+.wm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  line-height: 1;
+}
+
+.wm-title {
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 500;
-  font-size: 2.6rem;
-  color: var(--gold);
+  font-size: 2rem;
+  color: var(--text);
   letter-spacing: 0.01em;
   line-height: 1;
+}
+
+.wm-sub {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
 }
 
 .home-header-actions { display: flex; gap: 0.5rem; align-items: center; }

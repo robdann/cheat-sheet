@@ -244,43 +244,6 @@ function generateRandomSetlist() {
   save(); render();
 }
 
-// ─── Import / Export ───────────────────────────────────────────────────────────
-
-function exportData() {
-  const data = { songs: state.songs, setlists: state.setlists };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'cheatsheet-export.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-function importData() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.json,application/json';
-  input.onchange = async () => {
-    const file = input.files[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      // Accept both {songs, setlists} and plain songs array (old format)
-      const songs    = Array.isArray(data) ? data : (data.songs    || []);
-      const setlists = Array.isArray(data) ? []   : (data.setlists || []);
-      if (!Array.isArray(songs)) throw new Error('Invalid format');
-      if (!confirm(`Import ${songs.length} song(s) and ${setlists.length} set list(s)? This will replace all current data.`)) return;
-      state.songs    = songs;
-      state.setlists = setlists;
-      save();
-      render();
-    } catch (e) {
-      alert('Could not read file: ' + e.message);
-    }
-  };
-  input.click();
-}
 
 // ─── Render helpers ────────────────────────────────────────────────────────────
 
@@ -349,10 +312,14 @@ function renderHome() {
   return `
     <div class="home">
       <header class="home-header">
-        <h1>Cheat Sheet</h1>
+        <div class="home-wordmark">
+          <div class="wm-icon"></div>
+          <div class="wm-text">
+            <span class="wm-title">Cheat Sheet</span>
+            <span class="wm-sub">Praise · Worship</span>
+          </div>
+        </div>
         <div class="home-header-actions">
-          <button class="btn-sm" onclick="importData()" title="Import from a JSON file">↑ Import</button>
-          <button class="btn-sm" onclick="exportData()" title="Export all data to a JSON file">↓ Export</button>
         </div>
       </header>
 

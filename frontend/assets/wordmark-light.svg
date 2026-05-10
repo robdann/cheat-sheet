@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 160" width="720" height="160">
+  <defs>
+    
+  </defs>
+  <g transform="translate(20,30)">
+    <rect x="6" y="6" width="84" height="84" rx="2" fill="none" stroke="#1a1418" stroke-width="3"></rect>
+    <circle cx="48" cy="48" r="14" fill="#c79324"></circle>
+  </g>
+  <text class="wm" x="140" y="84">Cheat Sheet</text>
+  <text class="sub" x="140" y="112">WORSHIP · CUE SHEETS</text>
+</svg>
