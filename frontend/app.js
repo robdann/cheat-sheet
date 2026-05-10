@@ -364,7 +364,7 @@ function renderHome() {
         ? `<p class="empty-state">No songs yet.</p>`
         : `<ul class="song-list">
             ${[...state.songs].sort((a, b) => (a.title || '').localeCompare(b.title || '')).map(s => `
-              <li class="song-item" onclick="openSong('${s.id}')">
+              <li class="song-item ${s.type ? 'has-type type-' + s.type.toLowerCase().replace('-','') : ''}" onclick="openSong('${s.id}')">
                 <div class="song-item-left">
                   ${s.key ? `<span class="badge-key">${esc(s.key)}</span>` : ''}
                   <span class="song-item-title">${esc(s.title)}</span>
