@@ -62,6 +62,14 @@ function esc(v) {
 // ─── Song mutations ────────────────────────────────────────────────────────────
 
 function goHome()     { state.view = 'home'; save(); render(); }
+
+function copySetlistLink(id) {
+  const url = `${location.origin}${location.pathname}#setlist/${id}`;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.querySelector('.btn-sm[onclick^="copySetlistLink"]');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Share', 1500); }
+  });
+}
 function setView(v)   { state.view = v; save(); render(); }
 function openSong(id)     { state.songId = id; state.view = 'perform'; save(); render(); }
 function editSong(id)     { state.songId = id; state.view = 'edit'; save(); render(); }
@@ -615,6 +623,7 @@ function renderSetlistPerformView() {
       <div class="topbar topbar-perform">
         <button class="btn-back" onclick="goHome()">← Home</button>
         <span class="sl-perform-title">${esc(sl.name)}</span>
+        <button class="btn-sm" onclick="copySetlistLink('${sl.id}')">Share</button>
         <button class="btn-sm" onclick="window.print()">Print</button>
       </div>
       ${viewToggleHTML('perform', 'setlist-edit', 'setlist-perform')}
@@ -650,8 +659,39 @@ function render() {
   else if (state.view === 'perform')         app.innerHTML = renderPerformView();
   else if (state.view === 'setlist-edit')    app.innerHTML = renderSetlistEditShell();
   else if (state.view === 'setlist-perform') app.innerHTML = renderSetlistPerformView();
+  syncHash();
 }
+
+// ─── Routing ───────────────────────────────────────────────────────────────────
+
+function syncHash() {
+  const h = buildHash();
+  if (location.hash !== h) history.replaceState(null, '', h || '#');
+}
+
+function buildHash() {
+  if (state.view === 'setlist-perform') return `#setlist/${state.setlistId}`;
+  if (state.view === 'setlist-edit')    return `#setlist/${state.setlistId}/edit`;
+  if (state.view === 'perform')         return `#song/${state.songId}`;
+  if (state.view === 'edit')            return `#song/${state.songId}/edit`;
+  return '';
+}
+
+function applyHash() {
+  const hash = location.hash.replace(/^#/, '');
+  if (!hash) return;
+  const [type, id, sub] = hash.split('/');
+  if (type === 'setlist' && id) {
+    state.setlistId = id;
+    state.view = sub === 'edit' ? 'setlist-edit' : 'setlist-perform';
+  } else if (type === 'song' && id) {
+    state.songId = id;
+    state.view = sub === 'edit' ? 'edit' : 'perform';
+  }
+}
+
+window.addEventListener('popstate', () => { applyHash(); render(); });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-load().then(() => render());
+load().then(() => { applyHash(); render(); });
