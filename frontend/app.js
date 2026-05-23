@@ -63,6 +63,28 @@ function esc(v) {
 
 function goHome()     { state.view = 'home'; save(); render(); }
 
+function copySong(id) {
+  const song = state.songs.find(s => s.id === id);
+  if (!song) return;
+  navigator.clipboard.writeText(JSON.stringify(song)).then(() => {
+    const btn = document.querySelector(`.btn-icon[onclick="copySong('${id}')"]`);
+    if (btn) { btn.textContent = '✓'; setTimeout(() => btn.textContent = '⎘', 1500); }
+  });
+}
+
+async function pasteSong() {
+  try {
+    const text = await navigator.clipboard.readText();
+    const song = JSON.parse(text);
+    if (!song.sections || !song.arrangement) throw new Error('Not a song');
+    song.id = uid();
+    state.songs.push(song);
+    save(); render();
+  } catch (_) {
+    alert('Clipboard does not contain a valid song.');
+  }
+}
+
 function copySetlistLink(id) {
   const url = `${location.origin}${location.pathname}#setlist/${id}`;
   navigator.clipboard.writeText(url).then(() => {
@@ -328,6 +350,7 @@ function renderHome() {
         <span class="song-item-title">${esc(s.title)}</span>
       </div>
       <div class="song-item-actions">
+        <button class="btn-icon" title="Copy song" onclick="event.stopPropagation(); copySong('${s.id}')">⎘</button>
         <button class="btn-icon" title="Edit" onclick="event.stopPropagation(); editSong('${s.id}')">✎</button>
         <button class="btn-icon" onclick="event.stopPropagation(); deleteSong('${s.id}')">×</button>
       </div>
@@ -364,6 +387,7 @@ function renderHome() {
 
       ${tab === 'songs' ? `
         <div class="home-tab-actions">
+          <button class="btn-sm" onclick="pasteSong()">⎘ Paste Song</button>
           <button class="btn-primary" onclick="newSong()">+ New Song</button>
         </div>
         ${state.songs.length === 0
