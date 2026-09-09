@@ -2,7 +2,7 @@
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
-let state = { songs: [], setlists: [], view: 'home', songId: null, setlistId: null, homeTab: 'songs' };
+let state = { songs: [], setlists: [], view: 'home', songId: null, setlistId: null, homeTab: 'songs', compact: false };
 let _saveTimer = null;
 let _saveStatus = 'saved';
 
@@ -57,6 +57,29 @@ function getStep(aid)    { return S().arrangement.find(a => a.id === aid); }
 
 function esc(v) {
   return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// A line is either a plain string (repeat 1) or { text, repeat }.
+function lineText(line)   { return typeof line === 'string' ? line : (line?.text ?? ''); }
+function lineRepeat(line) {
+  const r = typeof line === 'string' ? 1 : parseInt(line?.repeat, 10);
+  return r > 1 ? r : 1;
+}
+function mkLine(text, repeat) { return repeat > 1 ? { text, repeat } : text; }
+
+// Compact mode is a per-device view preference, kept outside the synced song data.
+function toggleCompact(on) {
+  state.compact = on;
+  try { localStorage.setItem('cs_compact', on ? '1' : '0'); } catch (_) {}
+  render();
+}
+
+function compactToggleHTML() {
+  return `
+    <label class="compact-toggle" title="Show a repeated line once as (×n) instead of repeating it">
+      <input type="checkbox" ${state.compact ? 'checked' : ''} onchange="toggleCompact(this.checked)">
+      <span>Compact</span>
+    </label>`;
 }
 
 // ─── Song mutations ────────────────────────────────────────────────────────────
@@ -155,7 +178,19 @@ function removeLine(sid, idx) {
   if (lines.length > 1) { lines.splice(idx, 1); save(); renderSections(); }
 }
 
-function updateLine(sid, idx, value) { getSection(sid).lines[idx] = value; save(); }
+function updateLine(sid, idx, value) {
+  const lines = getSection(sid).lines;
+  lines[idx] = mkLine(value, lineRepeat(lines[idx]));
+  save();
+}
+
+function updateLineRepeat(sid, idx, el) {
+  const lines = getSection(sid).lines;
+  const n = parseInt(el.value, 10);
+  lines[idx] = mkLine(lineText(lines[idx]), n);
+  el.value = n > 1 ? n : '';   // blank means once
+  save();
+}
 
 function addStep(sectionId) {
   S().arrangement.push({ id: uid(), sectionId, dynamics: '', note: '', transitionNote: '' });
@@ -329,7 +364,14 @@ function renderSongBlock(song, overrideKey) {
           <div class="p-section">
             <span class="p-sec-abbr">${esc(sec.abbr)}</span>
             <div class="p-lines">
-              ${sec.lines.map(line => `<div class="p-line">${esc(line)}</div>`).join('')}
+              ${sec.lines.flatMap(line => {
+                const n = lineRepeat(line);
+                const text = esc(lineText(line));
+                if (state.compact || n === 1) {
+                  return `<div class="p-line">${text}${n > 1 ? ` <span class="p-rep">(×${n})</span>` : ''}</div>`;
+                }
+                return Array.from({ length: n }, () => `<div class="p-line">${text}</div>`);
+              }).join('')}
             </div>
           </div>
         `).join('')}
@@ -465,15 +507,24 @@ function renderSectionsHTML() {
             </div>
           </div>
           <div class="sec-lines">
-            ${sec.lines.map((line, i) => `
+            ${sec.lines.map((line, i) => {
+              const rep = lineRepeat(line);
+              return `
               <div class="line-row">
-                <input class="input-line" value="${esc(line)}" placeholder="1  5  6  4"
+                <input class="input-line" value="${esc(lineText(line))}" placeholder="1  5  6  4"
                        onblur="updateLine('${sec.id}', ${i}, this.value)">
+                <label class="repeat-box" title="Times to play this line">
+                  <span class="repeat-x">×</span>
+                  <input class="input-repeat" type="number" min="1" inputmode="numeric" placeholder="1"
+                         value="${rep > 1 ? rep : ''}"
+                         onchange="updateLineRepeat('${sec.id}', ${i}, this)"
+                         onkeydown="if(event.key==='Enter') this.blur()">
+                </label>
                 ${sec.lines.length > 1
                   ? `<button class="btn-icon-sm" onclick="removeLine('${sec.id}', ${i})">×</button>`
                   : ''}
-              </div>
-            `).join('')}
+              </div>`;
+            }).join('')}
             <button class="btn-addline" onclick="addLine('${sec.id}')">+ line</button>
           </div>
         </div>
@@ -547,7 +598,10 @@ function renderPerformView() {
     <div class="perform-layout">
       <div class="topbar topbar-perform">
         <button class="btn-back" onclick="goHome()">← Home</button>
-        <button class="btn-sm" onclick="window.print()">Print</button>
+        <div class="topbar-actions">
+          ${compactToggleHTML()}
+          <button class="btn-sm" onclick="window.print()">Print</button>
+        </div>
       </div>
       ${viewToggleHTML('perform', 'edit', 'perform')}
       <div class="perform-sheet" id="print-area">
@@ -647,8 +701,11 @@ function renderSetlistPerformView() {
       <div class="topbar topbar-perform">
         <button class="btn-back" onclick="goHome()">← Home</button>
         <span class="sl-perform-title">${esc(sl.name)}</span>
-        <button class="btn-sm" onclick="copySetlistLink('${sl.id}')">Share</button>
-        <button class="btn-sm" onclick="window.print()">Print</button>
+        <div class="topbar-actions">
+          ${compactToggleHTML()}
+          <button class="btn-sm" onclick="copySetlistLink('${sl.id}')">Share</button>
+          <button class="btn-sm" onclick="window.print()">Print</button>
+        </div>
       </div>
       ${viewToggleHTML('perform', 'setlist-edit', 'setlist-perform')}
       <div class="perform-sheet" id="print-area">
@@ -717,5 +774,7 @@ function applyHash() {
 window.addEventListener('popstate', () => { applyHash(); render(); });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+
+try { state.compact = localStorage.getItem('cs_compact') === '1'; } catch (_) {}
 
 load().then(() => { applyHash(); render(); });

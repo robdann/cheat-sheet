@@ -420,6 +420,23 @@ input  { font-family: var(--font-ui); }
 
 .topbar-perform { justify-content: space-between; }
 
+.topbar-actions { display: flex; align-items: center; gap: 0.8rem; }
+
+.compact-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+.compact-toggle:hover { color: var(--text); }
+.compact-toggle input { accent-color: var(--gold); cursor: pointer; margin: 0; }
+
 .input-title {
   flex: 1;
   background: none;
@@ -601,6 +618,35 @@ input  { font-family: var(--font-ui); }
 }
 .input-line:focus { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dim); }
 .input-line::placeholder { color: var(--muted); font-size: 0.78rem; letter-spacing: 0; opacity: 0.6; }
+
+.repeat-box {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.35rem 0.4rem;
+  flex: none;
+}
+.repeat-box:focus-within { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-dim); }
+.repeat-x { color: var(--muted); font-size: 0.78rem; }
+
+.input-repeat {
+  width: 1.9rem;
+  background: none;
+  border: none;
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  text-align: center;
+  outline: none;
+  padding: 0;
+  -moz-appearance: textfield;
+}
+.input-repeat::-webkit-outer-spin-button,
+.input-repeat::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.input-repeat::placeholder { color: var(--muted); opacity: 0.6; }
 
 .btn-addline {
   background: none;
@@ -833,6 +879,13 @@ input  { font-family: var(--font-ui); }
 
 .p-lines { display: flex; flex-direction: column; gap: 0.2rem; }
 
+.p-rep {
+  color: var(--muted);
+  font-size: 0.65em;
+  letter-spacing: normal;
+  margin-left: 0.15em;
+}
+
 .p-line {
   font-family: var(--font-mono);
   color: var(--text);
@@ -1051,6 +1104,7 @@ input  { font-family: var(--font-ui); }
   .p-sep { color: #666; }
   .p-sec-abbr { color: #000; }
   .p-line { color: #000; font-size: 1.1rem; }
+  .p-rep { color: #555; }
   .p-step-box { background: #f5f5f5; border-color: #ccc; border-left-color: #999; }
   .p-step-abbr { color: #000; }
   .p-trans-note { color: #333; }
