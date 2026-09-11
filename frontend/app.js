@@ -82,6 +82,45 @@ function compactToggleHTML() {
     </label>`;
 }
 
+// ─── Links & media ─────────────────────────────────────────────────────────────
+
+// Only ever emit http(s) links — never javascript:, data:, etc.
+function safeUrl(url) {
+  const u = String(url ?? '').trim();
+  return /^https?:\/\//i.test(u) ? u : '';
+}
+
+// Accepts what people actually paste: bare domains get an https:// prefix.
+function normalizeUrl(url) {
+  const u = String(url ?? '').trim();
+  if (!u) return '';
+  return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : 'https://' + u;
+}
+
+// watch?v= / youtu.be / embed / shorts / live, with an optional start time.
+function ytEmbed(url) {
+  const u = String(url ?? '');
+  const id = u.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (!id) return '';
+  const t = u.match(/[?&](?:t|start)=(?:(\d+)h)?(?:(\d+)m)?(\d+)s?(?:&|$)/);
+  const start = t ? (+(t[1] || 0) * 3600 + +(t[2] || 0) * 60 + +t[3]) : 0;
+  return `https://www.youtube-nocookie.com/embed/${id[1]}${start ? '?start=' + start : ''}`;
+}
+
+// Lazily attach the iframe, so a sheet full of songs loads no players up front.
+function toggleVideo(boxId, embedUrl) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  if (!box.firstChild) {
+    box.innerHTML = `<iframe src="${esc(embedUrl)}" title="Song video" loading="lazy" allowfullscreen
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
+  }
+  box.hidden = !box.hidden;
+  if (box.hidden) box.innerHTML = '';   // stop playback when collapsed
+  const btn = document.querySelector(`[aria-controls="${boxId}"]`);
+  if (btn) btn.classList.toggle('active', !box.hidden);
+}
+
 // ─── Song mutations ────────────────────────────────────────────────────────────
 
 function goHome()     { state.view = 'home'; save(); render(); }
@@ -136,6 +175,12 @@ function deleteSong(id) {
 }
 
 function updateSong(field, value) { S()[field] = value; save(); }
+
+function updateSongUrl(field, el) {
+  el.value = normalizeUrl(el.value);
+  S()[field] = el.value;
+  save(); render();
+}
 
 function setSongType(type) {
   S().type = S().type === type ? '' : type;
@@ -324,6 +369,8 @@ function instanceNum(arrangement, idx) {
   return arrangement.slice(0, idx + 1).filter(a => a.sectionId === step.sectionId).length;
 }
 
+let _blockSeq = 0;
+
 // Renders a single song's perform block (used in both single and setlist perform views)
 function renderSongBlock(song, overrideKey) {
   const arr = song.arrangement;
@@ -352,12 +399,24 @@ function renderSongBlock(song, overrideKey) {
       </div>`;
   }).join('');
 
+  const embed   = ytEmbed(song.video);
+  const chart   = safeUrl(song.chart);
+  const boxId   = `video-${song.id}-${_blockSeq++}`;
+  const media = embed || chart ? `
+    <div class="p-media">
+      ${embed ? `<button class="p-media-btn" aria-controls="${boxId}" aria-expanded="false"
+                         onclick="toggleVideo('${boxId}', '${esc(embed)}')">▶ Video</button>` : ''}
+      ${chart ? `<a class="p-media-btn" href="${esc(chart)}" target="_blank" rel="noopener noreferrer">Chart ↗</a>` : ''}
+    </div>` : '';
+
   return `
     <div class="p-header">
       ${key ? `<span class="p-key">${esc(key)}</span><span class="p-sep">|</span>` : ''}
       <span class="p-title">${esc(song.title)}</span>
       ${song.tempo ? `<span class="p-tempo">♩=${esc(song.tempo)}</span>` : ''}
+      ${media}
     </div>
+    ${embed ? `<div class="p-video" id="${boxId}" hidden></div>` : ''}
     <div class="p-body">
       <div class="p-sections">
         ${usedSections.map(sec => `
@@ -477,10 +536,34 @@ function renderEditShell() {
         <span id="save-status" class="save-status ${_saveStatus}">${_saveStatus === 'saving' ? 'Saving…' : _saveStatus === 'error' ? 'Save failed' : 'Saved'}</span>
       </div>
       ${viewToggleHTML('edit', 'edit', 'perform')}
+      ${renderSongMetaHTML()}
       <div class="edit-body">
         <div class="panel" id="sections-panel">${renderSectionsHTML()}</div>
         <div class="panel" id="arrangement-panel">${renderArrangementHTML()}</div>
       </div>
+    </div>`;
+}
+
+function renderSongMetaHTML() {
+  const s = S();
+  const embed = ytEmbed(s.video);
+  const chart = safeUrl(s.chart);
+  return `
+    <div class="song-meta">
+      <label class="meta-field ${s.video && !embed ? 'meta-bad' : ''}">
+        <span class="meta-icon">▶</span>
+        <input class="input-meta" value="${esc(s.video || '')}" placeholder="YouTube link"
+               onblur="updateSongUrl('video', this)"
+               onkeydown="if(event.key==='Enter') this.blur()">
+      </label>
+      ${s.video && !embed ? '<span class="meta-warn">Not a YouTube link</span>' : ''}
+      <label class="meta-field">
+        <span class="meta-icon">🔗</span>
+        <input class="input-meta" value="${esc(s.chart || '')}" placeholder="Chord sheet link"
+               onblur="updateSongUrl('chart', this)"
+               onkeydown="if(event.key==='Enter') this.blur()">
+      </label>
+      ${chart ? `<a class="meta-open" href="${esc(chart)}" target="_blank" rel="noopener noreferrer">Open ↗</a>` : ''}
     </div>`;
 }
 
